@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <script type="module">
+    // TODO: test audio output on a device that actually has drivers
+    import vd from '../../src/index.js'
+    let movie
+
+    const loadInputs = () => {
+      const inputs = document.querySelectorAll('input')
+      let loadedCount = 0
+      inputs.forEach(input => {
+        const target = document.querySelector(`#media ${input.id}`)
+        const onload = () => {
+          loadedCount++
+          if (loadedCount === inputs.length) {
+            // Ready, now initialize the movie
+            initMovie()
+          }
+        }
+        if (target.tagName === 'IMG') {
+          target.onload = onload
+        } else if (target.tagName === 'VIDEO') {
+          target.onloadeddata = onload
+        } else {
+          throw new Error('invalid media tag: ' + target.tagName)
+        }
+        target.src = URL.createObjectURL(input.files[0])
+      })
+    }
+
+    const initMovie = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 600
+      canvas.height = 400
+      document.body.appendChild(canvas)
+      movie = new vd.Movie(canvas)
+      const video = document.querySelector('#media video')
+      movie.width = video.videoWidth
+      movie.height = video.videoHeight
+      console.log('Exporting...')
+      movie
+        .addLayer(new vd.layer.Image(0, 3, document.querySelector('#media img')))
+        .addLayer(new vd.layer.Video(3, video, { duration: 5 }))
+        .record(25)
+        .then(blob => {
+          const fileReader = new FileReader()
+          fileReader.readAsArrayBuffer(blob)
+          fileReader.onload = () => {
+            // Convert to array (otherwise, it's not sent to node correctly).
+            const array = [...new Uint8Array(fileReader.result)]
+            const event = new CustomEvent('export', { detail: { data: array, type: blob.type } })
+            window.dispatchEvent(event)
+          }
+        })
+        .catch(error => {
+          throw error
+        })
+    }
+
+    // Expose to puppeteer
+    window.loadInputs = loadInputs
+  </script>
+  <div>
+    <input type="file" id="img"/>
+    <input type="file" id="video"/>
+  </div>
+  <div id="media">
+    <img style="display: none"/>
+    <video style="display: none"></video>
+  </div>
+</body>
+</html>
